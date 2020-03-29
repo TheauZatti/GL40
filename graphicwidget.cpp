@@ -6,6 +6,6 @@ GraphicWidget::GraphicWidget()
 
 }
 
-void GraphicWidget::mousePressEvent(QMouseEvent *event){
+void GraphicWidget::mousePressEvent(QMouseEvent  *event){
     emit circleClicked(event->x(),event->y());
 }

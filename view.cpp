@@ -13,7 +13,11 @@
 #include <QImage>
 #include <QStackedLayout>
 #include <QGraphicsView>
+#include <QGraphicsScene>
+#include <QStringList>
 #include <QDebug>
+#include <QtCharts>
+#include <QtGlobal>
 
 
 View::View(Model *model): QMainWindow()
@@ -169,7 +173,6 @@ View::View(Model *model): QMainWindow()
     this->updateMsg();
 
     graphicView = new GraphicWidget();
-    graphicView->setFixedSize(700,300);
     testVerticalLayout->addWidget(graphicView);
 
     testVerticalLayout->addWidget(new QLabel("Cliquez sur les cibles qui apparaissent en <font color='red'><strong>rouge</strong></font>."));
@@ -193,16 +196,43 @@ View::View(Model *model): QMainWindow()
     QVBoxLayout *resultVerticallayout = new QVBoxLayout(resultWidget);
     resultVerticallayout->setAlignment(Qt::AlignHCenter);
 
-    resultGraph = new QGraphicsView;
-    resultGraph->setFixedSize(700,300);
-    resultVerticallayout->addWidget(resultGraph);
+    series = new QLineSeries();
+    series->setName("Courbe de la loi de Fitts empirique");
+    fitts = new QLineSeries();
+    fitts->setName("Courbe de la loi de Fitts théorique");
+
+    QChart *resultChart = new QChart();
+    resultChart->createDefaultAxes();
+
+    QChartView *chartView = new QChartView(resultChart);
+    chartView->setFixedSize(700,300);
+    resultVerticallayout->addWidget(chartView);
+
+    resultChart->addSeries(fitts);
+    resultChart->addSeries(series);
+
+    axisX = new QValueAxis;
+    axisX->setMax(this->model->number);
+    axisX->setMin(1);
+    axisX->setTickInterval(1);
+    axisX->setLabelFormat("%d");
+
+    axisY = new QValueAxis;
+    axisY->setMin(200);
+    axisY->setTickInterval(50);
+    axisY->setLabelFormat("%d");
+    resultChart->addAxis(axisX, Qt::AlignBottom);
+    resultChart->addAxis(axisY, Qt::AlignLeft);
+    series->attachAxis(axisX);
+    series->attachAxis(axisY);
+
 
     QGroupBox *resultsBox = new QGroupBox("Résultats");
-    QGridLayout *resultGrid = new QGridLayout(resultsBox);
-    resultGrid->addWidget(new QLabel("Ecart-type: " + QString::number(this->model->eccartType)),0,0);
-    resultGrid->addWidget(new QLabel("Erreur type: " + QString::number(this->model->erreurType)),1,0);
-    resultGrid->addWidget(new QLabel("Différence moyenne: " + QString::number(this->model->diffMoyenne)),0,1);
-    resultGrid->addWidget(new QLabel("Intervalle de confiance à 95%: " + QString::number(this->model->intervalle)),1,1);
+    resultGrid = new QGridLayout(resultsBox);
+    resultGrid->addWidget(ecart = new QLabel("Ecart-type: " + QString::number(this->model->ecartTypeVal) + " ms"),0,0);
+    resultGrid->addWidget(erreur = new QLabel("Erreur type: " + QString::number(this->model->erreurTypeVal) + " ms"),1,0);
+    resultGrid->addWidget(diff = new QLabel("Différence moyenne: " + QString::number(this->model->diffMoyenneVal) + " ms"),0,1);
+    resultGrid->addWidget(intervalle = new QLabel("Intervalle de confiance à 95%: " + QString::number(this->model->intervalleVal) + " ms"),1,1);
 
     resultVerticallayout->addWidget(resultsBox);
 
@@ -236,28 +266,68 @@ View::View(Model *model): QMainWindow()
 
 }
 
+void View::reset(){
+    aSpin->setValue(this->model->a);
+    bSpin->setValue(this->model->b);
+    lineOneSpin->setValue(this->model->number);
+    lineTwoSpin->setValue(this->model->min);
+    lineThreeSpin->setValue(this->model->max);
+    ecart->setText("Ecart-type: " + QString::number(this->model->ecartTypeVal) + " ms");
+    erreur->setText("Erreur type: " + QString::number(this->model->erreurTypeVal) + " ms");
+    diff->setText("Différence moyenne: " + QString::number(this->model->diffMoyenneVal) + " ms");
+    intervalle->setText("Intervalle de confiance à 95%: " + QString::number(this->model->intervalleVal) + " ms");
+    series->clear();
+    fitts->clear();
+    results->setEnabled(false);
+}
+
 void View::drawCircle(){
-    graphScene->clear();
 
-    this->model->taille = (qrand() % ((this->model->max - this->model->min) + this->model->min));
+    do{
+            this->model->taille = (qrand() % ((this->model->max - this->model->min) + this->model->min));
+    }while(this->model->taille < this->model->min);
+
     this->model->rayon = this->model->taille/2;
-    qreal posX = qrand() % ((this->model->gWidth - this->model->taille) + this->model->taille );
-    qreal posY = qrand() % ((this->model->gHeight - this->model->taille) + this->model->taille );
+    this->model->sizes.push_front(this->model->taille);
 
-    this->model->coords = new QPoint(posX,posY);
+    do{
+      posX = qrand() % ((this->model->gWidth - this->model->taille) + this->model->taille );
+      posY = qrand() % ((this->model->gHeight - this->model->taille) + this->model->taille );
+    }while(posX > 700 || posY > 300);
 
-    graphScene->addEllipse(posX,posY,this->model->taille,this->model->taille,QPen(QColor("red")),QBrush(QColor("red")));
+    this->model->coords.setX(posX+this->model->rayon);
+    this->model->coords.setY(posY+this->model->rayon);
+
+    cercle->setRect(posX,posY,this->model->taille,this->model->taille);
+    cercle->setBrush(Qt::red);
 }
 
 void View::startSimulation(int value){
     mainStack->setCurrentIndex(value);
     this->updateMsg();
+
     graphScene = new QGraphicsScene;
     graphicView->setScene(graphScene);
-    graphScene->clear();
-    this->model->coords = new QPoint(350,150);
+    graphicView->setFixedSize(700,300);
+    graphicView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    graphicView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    this->model->coords.setX(350);
+    this->model->coords.setY(150);
     this->model->rayon = 50;
-    graphScene->addEllipse(325,125,100,100,QPen(QColor("blue")),QBrush(QColor("blue")));
+    graphScene->setSceneRect(0,0,700,300);
+    cercle = new QGraphicsEllipseItem;
+    cercle->setRect(300,100,100,100);
+    cercle->setBrush(Qt::blue);
+    graphScene->addItem(cercle);
+
+}
+
+void View::showResults(){
+    mainStack->setCurrentIndex(2);
+    ecart->setText("Ecart-type: " + QString::number(this->model->ecartTypeVal) + " ms");
+    erreur->setText("Erreur type: " + QString::number(this->model->erreurTypeVal) + " ms");
+    diff->setText("Différence moyenne: " + QString::number(this->model->diffMoyenneVal) + " ms");
+    intervalle->setText("Intervalle de confiance à 95%: " + QString::number(this->model->intervalleVal) + " ms");
 }
 
 void View::nextIndex(int value){
@@ -270,6 +340,17 @@ void View::updateMsg(){
 
 void View::enable(){
     results->setEnabled(true);
+}
+
+void View::setChart(){
+
+    axisY->setMax(this->model->maximum());
+    for(int i = 1; i<this->model->results.length()+1;i++){
+        series->append(i,this->model->results[i-1]);
+    }
+    for(int j = 0; j<this->model->timeCompute.length();j++){
+        fitts->append(j,this->model->timeCompute[j]);
+    }
 }
 
 View::~View()

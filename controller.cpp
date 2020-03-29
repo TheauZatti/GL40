@@ -7,6 +7,8 @@
 #include <QDebug>
 #include <QtMath>
 #include <QtGlobal>
+#include <QList>
+#include <QPoint>
 
 Controller::Controller(View *view, Model *model)
 {
@@ -24,11 +26,7 @@ void Controller::start(){
 }
 
 void Controller::startSimulation(){
-    /*qDebug() << this->model->a;
-    qDebug() << this->model->b;
-    qDebug() << this->model->number;
-    qDebug() << this->model->min;
-    qDebug() << this->model->max;*/
+    isActive = false;
     this->view->startSimulation(1);
 }
 
@@ -57,23 +55,50 @@ void Controller::back(){
 }
 
 void Controller::results(){
-    this->view->nextIndex(2);
+    this->view->setChart();
+    this->model->ecartType();
+    this->model->erreurType();
+    this->model->diffMoyenne();
+    this->model->intervalle();
+    this->view->showResults();
+
 }
 
 void Controller::restart(){
     this->view->nextIndex(0);
+    this->model->resetVal();
+    this->view->reset();
 }
 
 void Controller::clicked(int x,int y ){
 
-    if(this->model->number>0){
-        qDebug() <<this->model->coords->x() << x;
-        if(qSqrt(qPow((this->model->coords->x()-x),2)+qPow((this->model->coords->y()-y),2)) <= (this->model->rayon)){
-            this->model->number -= 1;
-            this->view->updateMsg();
-            this->view->drawCircle();
+    if(this->model->number>=0){
+        if(qSqrt(qPow((this->model->coords.x()-x),2)+qPow((this->model->coords.y()-y),2)) <= (this->model->rayon)){
+            if(isActive == true){
+                if(this->model->number==0){
+                    this->model->results.push_front(timer.elapsed());
+                    this->model->coordsTab.push_front(this->model->coords);
+                    this->model->compute();
+                    this->view->enable();
+                }else{
+                    this->model->results.push_front(timer.elapsed());
+                    this->model->coordsTab.push_front(this->model->coords);
+                    this->model->compute();
+                    this->model->x = x;
+                    this->model->y = y;
+                    this->model->number -= 1;
+                    this->view->updateMsg();
+                    this->view->drawCircle();
+                }
+            }else{
+                timer.restart();
+                isActive = true;
+                this->model->x = x;
+                this->model->y = y;
+                this->model->number -= 1;
+                this->view->updateMsg();
+                this->view->drawCircle();
+            }
         }
-    }else{
-        this->view->enable();
     }
 }

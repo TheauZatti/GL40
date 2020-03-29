@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QMouseEvent>
+#include <QElapsedTimer>
 
 class View;
 class Model;
@@ -30,6 +31,8 @@ private slots:
 private:
     View *view;
     Model *model;
+    bool isActive = false;
+    QElapsedTimer timer;
 };
 
 #endif // CONTROLLER_H
